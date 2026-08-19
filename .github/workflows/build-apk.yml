@@ -19,6 +19,21 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare web app
+        run: |
+          mkdir -p www
+          cp EduNexus_Updated.html www/index.html
+
+      - name: Create Capacitor config
+        run: |
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "com.edunexus.app",
+            "appName": "EduNexus",
+            "webDir": "www"
+          }
+          EOF
+
       - name: Add Android platform
         run: npx cap add android
 
