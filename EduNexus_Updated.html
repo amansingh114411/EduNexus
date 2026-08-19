@@ -1628,9 +1628,9 @@ body.app-module-open .edn-bottom-nav{
 <div class="auth-heading"><h2 id="authTitle">Welcome Back</h2><p id="authSubtitle">Sign in to continue to your school portal.</p></div>
 <div class="role-title">Select your portal</div>
 <div class="roles">
-<div class="role active" data-role="admin" onclick="selectRole('admin')"><div class="role-icon">👨‍💼</div><strong>Admin</strong><small>Management</small></div>
-<div class="role" data-role="teacher" onclick="selectRole('teacher')"><div class="role-icon">👨‍🏫</div><strong>Teacher</strong><small>Admin Assigned</small></div>
-<div class="role" data-role="parent" onclick="selectRole('parent')"><div class="role-icon">👨‍👩‍👧</div><strong>Parents</strong><small>Admin Assigned</small></div>
+<div class="role active" data-role="admin" onclick="window.selectRole('admin')"><div class="role-icon">👨‍💼</div><strong>Admin</strong><small>Management</small></div>
+<div class="role" data-role="teacher" onclick="window.selectRole('teacher')"><div class="role-icon">👨‍🏫</div><strong>Teacher</strong><small>Admin Assigned</small></div>
+<div class="role" data-role="parent" onclick="window.selectRole('parent')"><div class="role-icon">👨‍👩‍👧</div><strong>Parents</strong><small>Admin Assigned</small></div>
 </div>
 <div class="tabs"><button id="loginTab" class="tab active" onclick="switchMode('login')">Login</button><button id="signupTab" class="tab" onclick="switchMode('signup')">Sign Up</button></div>
 
@@ -5239,12 +5239,58 @@ body.app-module-open .edn-bottom-nav{
     time: new Date().toISOString()
   };
 
-  <script>
-(function () {
+  /*
+   * =====================================================
+   * WEBVIEW SAFE ROLE BRIDGE
+   * =====================================================
+   *
+   * Role buttons must remain functional even if the
+   * Firebase ES module is still loading.
+   */
 
-  window.__EDUNEXUS_WEBVIEW_BOOT__ = {
-    started: true,
-    time: new Date().toISOString()
+  window.__EDUNEXUS_WEBVIEW_BOOT__.pendingRole = "admin";
+
+  window.selectRole = function(role) {
+
+    if (
+      role !== "admin" &&
+      role !== "teacher" &&
+      role !== "parent"
+    ) {
+      return;
+    }
+
+    window.__EDUNEXUS_WEBVIEW_BOOT__.pendingRole = role;
+
+    /*
+     * Update role UI immediately.
+     */
+    document.querySelectorAll(".role").forEach(function(el) {
+      el.classList.toggle(
+        "active",
+        el.dataset.role === role
+      );
+    });
+
+    /*
+     * If the real application module has already
+     * initialized, let it take over.
+     */
+    if (
+      typeof window.__EDUNEXUS_REAL_SELECT_ROLE__ ===
+      "function"
+    ) {
+      return window.__EDUNEXUS_REAL_SELECT_ROLE__(role);
+    }
+
+    /*
+     * Module is still loading.
+     * The selected role is safely queued.
+     */
+    console.log(
+      "EduNexus: role queued for module:",
+      role
+    );
   };
 
   function showRuntimeError(message) {
@@ -6845,11 +6891,11 @@ async function requireAdminSession(){
 
 }
 
-window.selectRole=function(role){
-    
+window.__EDUNEXUS_REAL_SELECT_ROLE__ = function(role){
+
     window.__EDUNEXUS_WEBVIEW_BOOT__.lastRole = role;
 
- selectedRole=role;
+    selectedRole = role;
 
  document.querySelectorAll(".role").forEach(x=>{
    x.classList.toggle("active",x.dataset.role===role);
@@ -6888,6 +6934,24 @@ window.selectRole=function(role){
  document.getElementById("loginTab").style.display="block";
 
 };
+
+/*
+ * Apply role selected before Firebase module finished loading.
+ */
+if (
+  window.__EDUNEXUS_WEBVIEW_BOOT__.pendingRole &&
+  window.__EDUNEXUS_WEBVIEW_BOOT__.pendingRole !== "admin"
+) {
+  window.__EDUNEXUS_REAL_SELECT_ROLE__(
+    window.__EDUNEXUS_WEBVIEW_BOOT__.pendingRole
+  );
+}
+
+/*
+ * Expose the real implementation.
+ */
+window.selectRole =
+  window.__EDUNEXUS_REAL_SELECT_ROLE__;
 
 window.switchMode=function(mode){
 
