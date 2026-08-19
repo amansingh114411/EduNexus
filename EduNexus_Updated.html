@@ -5232,21 +5232,214 @@ body.app-module-open .edn-bottom-nav{
 
 <div id="toast"></div>
 
+<script>
+(function () {
+  window.__EDUNEXUS_WEBVIEW_BOOT__ = {
+    started: true,
+    time: new Date().toISOString()
+  };
+
+  <script>
+(function () {
+
+  window.__EDUNEXUS_WEBVIEW_BOOT__ = {
+    started: true,
+    time: new Date().toISOString()
+  };
+
+  function showRuntimeError(message) {
+
+    console.error(
+      "EDUNEXUS RUNTIME ERROR:",
+      message
+    );
+
+    window.__EDUNEXUS_WEBVIEW_BOOT__.lastError =
+      String(message);
+
+    var box =
+      document.getElementById(
+        "ednRuntimeError"
+      );
+
+    if(!box){
+
+      box =
+        document.createElement(
+          "div"
+        );
+
+      box.id =
+        "ednRuntimeError";
+
+      box.style.cssText =
+        "position:fixed;" +
+        "left:10px;" +
+        "right:10px;" +
+        "bottom:10px;" +
+        "z-index:2147483647;" +
+        "background:#7f1d1d;" +
+        "color:#fff;" +
+        "padding:14px;" +
+        "border-radius:10px;" +
+        "font:13px Arial;" +
+        "line-height:1.5;" +
+        "box-shadow:0 5px 25px rgba(0,0,0,.4);";
+
+      document.body.appendChild(
+        box
+      );
+    }
+
+    box.textContent =
+      "EduNexus Error: " +
+      String(message);
+  }
+
+
+  window.addEventListener(
+    "error",
+    function(event){
+
+      showRuntimeError(
+        event.error?.message ||
+        event.message ||
+        "Unknown JavaScript error"
+      );
+
+    }
+  );
+
+
+  window.addEventListener(
+    "unhandledrejection",
+    function(event){
+
+      showRuntimeError(
+        event.reason?.message ||
+        String(event.reason)
+      );
+
+    }
+  );
+
+
+  window.__EDUNEXUS_WEBVIEW_BOOT__
+    .diagnosticReady = true;
+
+})();
+</script>
+
 <script type="module">
 import {initializeApp,getApps,getApp} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
 import {getAuth,createUserWithEmailAndPassword,signInWithEmailAndPassword,GoogleAuthProvider,signInWithPopup,sendEmailVerification,sendPasswordResetEmail,updateProfile,reload,onAuthStateChanged,signOut} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 import {getFirestore,doc,getDoc,setDoc,updateDoc,collection,getDocs,query,where,serverTimestamp} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
 
-import {getAI,getGenerativeModel,GoogleAIBackend} from "https://www.gstatic.com/firebasejs/12.1.0/firebase-ai.js";
+const firebaseConfig={
+  apiKey:"AIzaSyC-vPK1WYN020DK9X9j46h3fzoS9DkV38g",
+  authDomain:"edunexus-c1d78.firebaseapp.com",
+  projectId:"edunexus-c1d78",
+  storageBucket:"edunexus-c1d78.firebasestorage.app",
+  messagingSenderId:"201439767497",
+  appId:"1:201439767497:web:535e326270d3e2c7525618"
+};
 
-const firebaseConfig={apiKey:"AIzaSyC-vPK1WYN020DK9X9j46h3fzoS9DkV38g",authDomain:"edunexus-c1d78.firebaseapp.com",projectId:"edunexus-c1d78",storageBucket:"edunexus-c1d78.firebasestorage.app",messagingSenderId:"201439767497",appId:"1:201439767497:web:535e326270d3e2c7525618"};
 const firebaseApp=initializeApp(firebaseConfig);
 
 const auth=getAuth(firebaseApp);
 const db=getFirestore(firebaseApp);
 
-const ai=getAI(firebaseApp,{backend:new GoogleAIBackend()});
-const geminiModel=getGenerativeModel(ai,{model:"gemini-3.7-flash"});
+window.__EDUNEXUS_WEBVIEW_BOOT__.firebaseReady = true;
+window.__EDUNEXUS_WEBVIEW_BOOT__.firebaseReadyTime =
+  new Date().toISOString();
+  
+  window.__EDUNEXUS_WEBVIEW_BOOT__.authBridgeReady = true;
+
+window.__EDUNEXUS_WEBVIEW_BOOT__.authBridgeTime =
+  new Date().toISOString();
+
+console.log("EduNexus Auth bridge initialized");
+
+console.log("EduNexus Firebase module initialized successfully");
+
+/* =====================================================
+   GEMINI — LAZY INITIALIZATION
+   AI must NOT block app startup/login.
+   ===================================================== */
+
+let realGeminiModel = null;
+
+async function getGeminiModel(){
+
+  if(realGeminiModel){
+    return realGeminiModel;
+  }
+
+  try{
+
+    const {
+      getAI,
+      getGenerativeModel,
+      GoogleAIBackend
+    } = await import(
+      "https://www.gstatic.com/firebasejs/12.1.0/firebase-ai.js"
+    );
+
+    const ai =
+      getAI(
+        firebaseApp,
+        {
+          backend:
+            new GoogleAIBackend()
+        }
+      );
+
+    realGeminiModel =
+      getGenerativeModel(
+        ai,
+        {
+          model:
+            "gemini-3.7-flash"
+        }
+      );
+
+    return realGeminiModel;
+
+  }catch(error){
+
+    console.error(
+      "GEMINI INITIALIZATION ERROR:",
+      error
+    );
+
+    throw error;
+  }
+}
+
+
+/*
+ * Compatibility wrapper.
+ *
+ * Existing EduNexus AI functions already call:
+ * geminiModel.generateContent(...)
+ *
+ * इसलिए बाकी code को अभी बदलने की जरूरत नहीं।
+ */
+
+const geminiModel = {
+
+  async generateContent(...args){
+
+    const model =
+      await getGeminiModel();
+
+    return model.generateContent(
+      ...args
+    );
+  }
+
+};
+
 const googleProvider=new GoogleAuthProvider();
 
 async function testGemini(){
@@ -6653,6 +6846,8 @@ async function requireAdminSession(){
 }
 
 window.selectRole=function(role){
+    
+    window.__EDUNEXUS_WEBVIEW_BOOT__.lastRole = role;
 
  selectedRole=role;
 
@@ -7293,24 +7488,40 @@ function hideAllPanels(){
   }
 
   [
+    "authApp",
+    "verificationScreen",
+    "adminPanel",
+    "adminSubscriptionScreen",
+    "teacherPanel",
+    "parentPanel",
+    "adminStudentsManagement",
+    "adminFeesManagement"
+  ].forEach(id=>{
 
-function hideAllPanels(){
+    const x =
+      document.getElementById(id);
+
+    if(x){
+      x.style.display = "none";
+    }
+
+  });
 
   [
     "adminManagement",
-"adminStudentsManagement",
-"adminFeesManagement",
-"adminNoticeManagement",
-"adminTeacherAttendance",
-"teacherAttendance",
-"teacherOwnAttendance",
-"teacherResults",
-"teacherNotices",
-"parentAttendance",
-"parentHomework",
-"parentResults",
-"parentFees",
-"parentNotices"
+    "adminStudentsManagement",
+    "adminFeesManagement",
+    "adminNoticeManagement",
+    "adminTeacherAttendance",
+    "teacherAttendance",
+    "teacherOwnAttendance",
+    "teacherResults",
+    "teacherNotices",
+    "parentAttendance",
+    "parentHomework",
+    "parentResults",
+    "parentFees",
+    "parentNotices"
   ].forEach(id=>{
 
     const x =
