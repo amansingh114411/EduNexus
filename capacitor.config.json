@@ -1,0 +1,6 @@
+{
+  "appId": "com.edunexus.app",
+  "appName": "EduNexus",
+  "webDir": ".",
+  "bundledWebRuntime": false
+}
