@@ -3,42 +3,222 @@ name: Build EduNexus APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+
+      # =====================================================
+      # 1. CHECKOUT
+      # =====================================================
+
       - name: Checkout
         uses: actions/checkout@v4
+
+
+      # =====================================================
+      # 2. NODE
+      # =====================================================
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
+
+      # =====================================================
+      # 3. INSTALL WEB DEPENDENCIES
+      # =====================================================
+
       - name: Install dependencies
         run: npm install
 
+
+      # =====================================================
+      # 4. PREPARE WEB APP
+      # =====================================================
+
       - name: Prepare web app
         run: |
+          rm -rf www
           mkdir -p www
           cp EduNexus_Updated.html www/index.html
+
+
+      # =====================================================
+      # 5. CREATE CAPACITOR CONFIG
+      # =====================================================
 
       - name: Create Capacitor config
         run: |
           cat > capacitor.config.json <<'EOF'
           {
             "appId": "com.edunexus.app",
-            "appName": "EduNexus",
+            "appName": "EduNexus ERP",
             "webDir": "www"
           }
           EOF
 
+
+      # =====================================================
+      # 6. CREATE CUSTOM EDUNEXUS LOGO
+      #
+      # No paid image/domain required.
+      # SVG is used as the source logo.
+      # =====================================================
+
+      - name: Create EduNexus logo
+        run: |
+          mkdir -p assets
+
+          cat > assets/logo.svg <<'EOF'
+          <svg xmlns="http://www.w3.org/2000/svg"
+               width="1024"
+               height="1024"
+               viewBox="0 0 1024 1024">
+
+            <defs>
+              <linearGradient id="bg"
+                              x1="0"
+                              y1="0"
+                              x2="1"
+                              y2="1">
+                <stop offset="0%"
+                      stop-color="#4169E1"/>
+                <stop offset="100%"
+                      stop-color="#2345C7"/>
+              </linearGradient>
+
+              <filter id="shadow"
+                      x="-20%"
+                      y="-20%"
+                      width="140%"
+                      height="140%">
+                <feDropShadow
+                  dx="0"
+                  dy="18"
+                  stdDeviation="18"
+                  flood-opacity="0.20"/>
+              </filter>
+            </defs>
+
+            <!-- Main rounded square -->
+            <rect
+              x="64"
+              y="64"
+              width="896"
+              height="896"
+              rx="210"
+              fill="url(#bg)"
+              filter="url(#shadow)"/>
+
+            <!-- Education / knowledge symbol -->
+            <path
+              d="M512 250
+                 L790 385
+                 L512 520
+                 L234 385
+                 Z"
+              fill="#FFFFFF"/>
+
+            <path
+              d="M330 455
+                 L330 625
+                 C330 625 390 710 512 710
+                 C634 710 694 625 694 625
+                 L694 455
+                 L512 545
+                 Z"
+              fill="#FFFFFF"
+              opacity="0.94"/>
+
+            <path
+              d="M790 385
+                 L790 610"
+              stroke="#FFFFFF"
+              stroke-width="26"
+              stroke-linecap="round"/>
+
+            <circle
+              cx="790"
+              cy="642"
+              r="28"
+              fill="#FFFFFF"/>
+
+            <!-- EN -->
+            <text
+              x="512"
+              y="855"
+              text-anchor="middle"
+              font-family="Arial, Helvetica, sans-serif"
+              font-size="150"
+              font-weight="700"
+              fill="#FFFFFF">
+              EN
+            </text>
+
+          </svg>
+          EOF
+
+
+      # =====================================================
+      # 7. ADD ANDROID PLATFORM
+      # =====================================================
+
       - name: Add Android platform
-        run: npx cap add android
+        run: |
+          npx cap add android
+
+
+      # =====================================================
+      # 8. COPY WEB APP
+      # =====================================================
 
       - name: Copy web app
-        run: npx cap copy android
+        run: |
+          npx cap copy android
+
+
+      # =====================================================
+      # 9. INSTALL CAPACITOR ASSETS
+      # =====================================================
+
+      - name: Install Capacitor Assets
+        run: |
+          npm install --save-dev @capacitor/assets
+
+
+      # =====================================================
+      # 10. GENERATE ANDROID ICON
+      # =====================================================
+
+      - name: Generate Android app icon
+        run: |
+          npx @capacitor/assets generate \
+            --android \
+            --assetPath assets \
+            --iconBackgroundColor "#4169E1" \
+            --iconBackgroundColorDark "#2345C7" \
+            --splashBackgroundColor "#FFFFFF" \
+            --splashBackgroundColorDark "#111827"
+
+
+      # =====================================================
+      # 11. COPY GENERATED NATIVE RESOURCES
+      # =====================================================
+
+      - name: Sync Capacitor Android
+        run: |
+          npx cap sync android
+
+
+      # =====================================================
+      # 12. SETUP JAVA
+      # =====================================================
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -46,14 +226,53 @@ jobs:
           distribution: temurin
           java-version: 21
 
+
+      # =====================================================
+      # 13. BUILD DEBUG APK
+      #
+      # Kept intentionally for first installation test.
+      # This APK is signed by Android's debug signing setup.
+      # =====================================================
+
       - name: Build Debug APK
         run: |
           cd android
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+
+      # =====================================================
+      # 14. RENAME APK
+      # =====================================================
+
+      - name: Prepare APK
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/debug/app-debug.apk \
+             release/EduNexus-ERP.apk
+
+
+      # =====================================================
+      # 15. UPLOAD ACTION ARTIFACT
+      # =====================================================
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: EduNexus-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: EduNexus-ERP-APK
+          path: release/EduNexus-ERP.apk
+
+
+      # =====================================================
+      # 16. CREATE GITHUB RELEASE
+      # =====================================================
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "EduNexus ERP v1.0.${{ github.run_number }}"
+          generate_release_notes: true
+          files: release/EduNexus-ERP.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
