@@ -214,6 +214,47 @@ jobs:
 
           identify build-assets/edunexus-logo-1024.png
 
+          # =========================================================
+      # NATIVE CAPACITOR SPLASH / ICON BRANDING
+      # =========================================================
+
+      - name: Generate native EduNexus splash and icons
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p assets
+
+          cp \
+            build-assets/edunexus-logo-1024.png \
+            assets/logo.png
+
+          echo "Installing Capacitor Assets..."
+
+          npm install \
+            --no-save \
+            --no-audit \
+            --no-fund \
+            @capacitor/assets
+
+          echo "Generating Android native branding..."
+
+          npx @capacitor/assets generate \
+            --android \
+            --iconBackgroundColor "#3159D9" \
+            --splashBackgroundColor "#FFFFFF"
+
+          echo "Native EduNexus branding generated."
+
+          find android/app/src/main/res \
+            -maxdepth 2 \
+            -type f \
+            \( \
+              -name "*splash*" \
+              -o -name "ic_launcher*" \
+            \) \
+            -print \
+            | sort
 
       # =========================================================
       # 9. CONFIGURE ANDROID APP ICON
