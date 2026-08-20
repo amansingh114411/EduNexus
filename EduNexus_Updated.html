@@ -7106,13 +7106,361 @@ async function saveAdminProfile(user,p){
 }
 
 async function createAdminAccount(){
- const fullName=document.getElementById("fullName").value.trim(),schoolName=document.getElementById("schoolName").value.trim(),mobile=document.getElementById("mobile").value.trim(),email=document.getElementById("email").value.trim().toLowerCase(),password=document.getElementById("password").value;
- if(fullName.length<2)return showToast("Please enter your full name.","error");
- if(schoolName.length<2)return showToast("Please enter your school name.","error");
- if(!/^[6-9][0-9]{9}$/.test(mobile))return showToast("Please enter a valid 10-digit Indian mobile number.","error");
- if(password.length<6)return showToast("Password must contain at least 6 characters.","error");
- const b=document.getElementById("submitButton");b.disabled=true;b.textContent="Creating Account...";
- try{const c=await createUserWithEmailAndPassword(auth,email,password),u=c.user;await updateProfile(u,{displayName:fullName});await sendEmailVerification(u);await saveAdminProfile(u,{fullName,schoolName,mobile,provider:"password"});verificationUser=u;showVerificationScreen(u);showToast("Verification email sent.","success")}catch(e){showFirebaseError(e)}finally{b.disabled=false;updateAuthUI()}
+
+  const fullName =
+    document.getElementById("fullName")
+      .value
+      .trim();
+
+  const schoolName =
+    document.getElementById("schoolName")
+      .value
+      .trim();
+
+  const mobile =
+    document.getElementById("mobile")
+      .value
+      .trim();
+
+  const email =
+    document.getElementById("email")
+      .value
+      .trim()
+      .toLowerCase();
+
+  const password =
+    document.getElementById("password")
+      .value;
+
+
+  /* =====================================================
+     VALIDATION
+     ===================================================== */
+
+  if(fullName.length < 2){
+    return showToast(
+      "Please enter your full name.",
+      "error"
+    );
+  }
+
+  if(schoolName.length < 2){
+    return showToast(
+      "Please enter your school name.",
+      "error"
+    );
+  }
+
+  if(!/^[6-9][0-9]{9}$/.test(mobile)){
+    return showToast(
+      "Please enter a valid 10-digit Indian mobile number.",
+      "error"
+    );
+  }
+
+  if(password.length < 6){
+    return showToast(
+      "Password must contain at least 6 characters.",
+      "error"
+    );
+  }
+
+
+  const b =
+    document.getElementById(
+      "submitButton"
+    );
+
+
+  if(b){
+    b.disabled = true;
+    b.textContent = "Creating Account...";
+  }
+
+
+  let createdUser = null;
+
+
+  try{
+
+    /*
+     * -----------------------------------------------------
+     * CREATE FIREBASE AUTH ACCOUNT
+     * -----------------------------------------------------
+     */
+
+        /*
+     * -----------------------------------------------------
+     * CHECK FOR PARTIALLY CREATED ACCOUNT
+     *
+     * If the previous attempt created Firebase Auth but
+     * Firestore profile was not created, sign in using the
+     * same credentials and complete the missing profile.
+     * -----------------------------------------------------
+     */
+
+    let credential;
+
+    try{
+
+      credential =
+        await createUserWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
+
+    }catch(authError){
+
+      if(
+        authError?.code ===
+        "auth/email-already-in-use"
+      ){
+
+        /*
+         * Try to recover the existing Auth account.
+         */
+
+        try{
+
+          credential =
+            await signInWithEmailAndPassword(
+              auth,
+              email,
+              password
+            );
+
+          const existingUser =
+            credential.user;
+
+          const existingProfile =
+            await getDoc(
+              doc(
+                db,
+                "users",
+                existingUser.uid
+              )
+            );
+
+
+          if(
+            !existingProfile.exists()
+          ){
+
+            createdUser =
+              existingUser;
+
+            await updateProfile(
+              existingUser,
+              {
+                displayName: fullName
+              }
+            );
+
+            await saveAdminProfile(
+              existingUser,
+              {
+                fullName,
+                schoolName,
+                mobile,
+                provider: "password"
+              }
+            );
+
+            await sendEmailVerification(
+              existingUser
+            );
+
+            verificationUser =
+              existingUser;
+
+            showVerificationScreen(
+              existingUser
+            );
+
+            showToast(
+              "Your previous incomplete signup was recovered.",
+              "success"
+            );
+
+            return;
+          }
+
+
+          /*
+           * Profile already exists.
+           * This is a genuine existing account.
+           */
+
+          await signOut(auth);
+
+          throw authError;
+
+        }catch(recoveryError){
+
+          /*
+           * If recovery itself failed, return the
+           * original Auth error where appropriate.
+           */
+
+          if(
+            recoveryError?.code ===
+            "auth/wrong-password"
+            ||
+            recoveryError?.code ===
+            "auth/invalid-credential"
+          ){
+
+            throw authError;
+
+          }
+
+          throw recoveryError;
+        }
+      }
+
+      throw authError;
+    }
+
+    createdUser =
+      credential.user;
+
+
+    /*
+     * -----------------------------------------------------
+     * UPDATE AUTH PROFILE
+     * -----------------------------------------------------
+     */
+
+    await updateProfile(
+      createdUser,
+      {
+        displayName: fullName
+      }
+    );
+
+
+    /*
+     * -----------------------------------------------------
+     * CREATE FIRESTORE ADMIN PROFILE
+     * -----------------------------------------------------
+     */
+
+    await saveAdminProfile(
+      createdUser,
+      {
+        fullName,
+        schoolName,
+        mobile,
+        provider: "password"
+      }
+    );
+
+
+    /*
+     * -----------------------------------------------------
+     * SEND EMAIL VERIFICATION
+     *
+     * Firestore profile is created FIRST.
+     * This prevents the profile/Auth state from getting
+     * out of sync.
+     * -----------------------------------------------------
+     */
+
+    await sendEmailVerification(
+      createdUser
+    );
+
+
+    verificationUser =
+      createdUser;
+
+
+    showVerificationScreen(
+      createdUser
+    );
+
+
+    showToast(
+      "Admin account created. Verification email sent.",
+      "success"
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "ADMIN SIGNUP ERROR:",
+      error
+    );
+
+
+    /*
+     * -----------------------------------------------------
+     * IMPORTANT RECOVERY
+     *
+     * If Auth account was created but Firestore profile
+     * creation failed, delete the newly-created Auth
+     * account so the user can retry with the same email.
+     *
+     * This fixes:
+     *
+     * First attempt:
+     * Firebase error
+     *
+     * Second attempt:
+     * Email already registered
+     * -----------------------------------------------------
+     */
+
+    if(
+      createdUser &&
+      error?.code ===
+        "permission-denied"
+    ){
+
+      try{
+
+        await createdUser.delete();
+
+        console.log(
+          "Incomplete Auth account deleted after Firestore failure."
+        );
+
+      }catch(deleteError){
+
+        console.error(
+          "AUTH CLEANUP ERROR:",
+          deleteError
+        );
+
+        try{
+          await signOut(auth);
+        }catch(_){}
+      }
+    }
+
+
+    /*
+     * -----------------------------------------------------
+     * If Firestore profile already exists, don't delete
+     * the Auth account.
+     * -----------------------------------------------------
+     */
+
+    showFirebaseError(
+      error
+    );
+
+
+  }finally{
+
+    if(b){
+      b.disabled = false;
+      updateAuthUI();
+    }
+
+  }
 }
 
 async function loginAdmin(){
@@ -7518,9 +7866,193 @@ window.handleAuthSubmit = async function(){
 
 };
 
-window.loginWithGoogle=async function(){
- if(selectedRole!=="admin")return showToast("Teacher and Parent accounts use the Admin-created Login ID.","error");
- try{const r=await signInWithPopup(auth,googleProvider),u=r.user;await reload(u);const s=await getDoc(doc(db,"users",u.uid));if(!s.exists()){showProfileRecovery(u,true);return}const p=s.data();if(p.role!=="admin"){await signOut(auth);return showToast("Access denied. This account is not an Admin.","error")}currentProfile=p;openAdminPanel(u,p)}catch(e){showFirebaseError(e)}
+window.loginWithGoogle = async function(){
+
+  if(
+    selectedRole !== "admin"
+  ){
+
+    return showToast(
+      "Teacher and Parent accounts use the Admin-created Login ID.",
+      "error"
+    );
+
+  }
+
+
+  const button =
+    document.getElementById(
+      "googleButton"
+    );
+
+
+  if(button){
+    button.disabled = true;
+    button.textContent = "Connecting to Google...";
+  }
+
+
+  try{
+
+    /*
+     * -----------------------------------------------------
+     * GOOGLE AUTHENTICATION
+     * -----------------------------------------------------
+     */
+
+    const result =
+      await signInWithPopup(
+        auth,
+        googleProvider
+      );
+
+
+    const user =
+      result.user;
+
+
+    await reload(
+      user
+    );
+
+
+    /*
+     * -----------------------------------------------------
+     * CHECK FIRESTORE PROFILE
+     * -----------------------------------------------------
+     */
+
+    const profileRef =
+      doc(
+        db,
+        "users",
+        user.uid
+      );
+
+    const profileSnap =
+      await getDoc(
+        profileRef
+      );
+
+
+    /*
+     * -----------------------------------------------------
+     * NEW GOOGLE ADMIN
+     *
+     * Firebase Auth account exists, but EduNexus
+     * profile doesn't exist yet.
+     *
+     * Do NOT create another Firebase Auth account.
+     * Complete the same account.
+     * -----------------------------------------------------
+     */
+
+    if(
+      !profileSnap.exists()
+    ){
+
+      showProfileRecovery(
+        user,
+        true
+      );
+
+      return;
+    }
+
+
+    const profile =
+      profileSnap.data();
+
+
+    /*
+     * -----------------------------------------------------
+     * SECURITY CHECK
+     * -----------------------------------------------------
+     */
+
+    if(
+      profile.role !== "admin"
+    ){
+
+      await signOut(
+        auth
+      );
+
+      return showToast(
+        "Access denied. This Google account is not an Admin.",
+        "error"
+      );
+    }
+
+
+    if(
+      profile.status === "disabled"
+      ||
+      profile.status === "removed"
+    ){
+
+      await signOut(
+        auth
+      );
+
+      return showToast(
+        profile.status === "removed"
+          ? "This Admin account has been removed."
+          : "This Admin account has been disabled.",
+        "error"
+      );
+    }
+
+
+    currentProfile =
+      profile;
+
+
+    openAdminPanel(
+      user,
+      profile
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "GOOGLE AUTH ERROR:",
+      error
+    );
+
+
+    /*
+     * Handle Google account already linked to
+     * another authentication provider.
+     */
+
+    if(
+      error?.code ===
+      "auth/account-exists-with-different-credential"
+    ){
+
+      return showToast(
+        "This Google email already has an EduNexus account. Login with your existing email/password account first.",
+        "error"
+      );
+    }
+
+
+    showFirebaseError(
+      error
+    );
+
+
+  }finally{
+
+    if(button){
+      button.disabled = false;
+      button.innerHTML =
+        "<b>G</b>&nbsp; Continue with Google";
+    }
+
+  }
 };
 
 function showProfileRecovery(user,google=false){
@@ -7530,10 +8062,210 @@ function showProfileRecovery(user,google=false){
  document.getElementById("authForm").onsubmit=async e=>{e.preventDefault();await completeExistingProfile(user,google)};
  showToast("Complete your Admin profile.","success");
 }
-async function completeExistingProfile(user,google=false){
- const fullName=document.getElementById("fullName").value.trim(),schoolName=document.getElementById("schoolName").value.trim(),mobile=document.getElementById("mobile").value.trim();
- if(fullName.length<2)return showToast("Please enter your full name.","error");if(schoolName.length<2)return showToast("Please enter your school name.","error");if(!/^[6-9][0-9]{9}$/.test(mobile))return showToast("Please enter a valid 10-digit Indian mobile number.","error");
- try{await updateProfile(user,{displayName:fullName});await saveAdminProfile(user,{fullName,schoolName,mobile,provider:google?"google":"password"});const s=await getDoc(doc(db,"users",user.uid));currentProfile=s.data();if(!google&&!user.emailVerified){verificationUser=user;showVerificationScreen(user);return}openAdminPanel(user,currentProfile)}catch(e){showFirebaseError(e)}
+async function completeExistingProfile(
+  user,
+  google = false
+){
+
+  const fullName =
+    document
+      .getElementById("fullName")
+      .value
+      .trim();
+
+  const schoolName =
+    document
+      .getElementById("schoolName")
+      .value
+      .trim();
+
+  const mobile =
+    document
+      .getElementById("mobile")
+      .value
+      .trim();
+
+
+  if(
+    fullName.length < 2
+  ){
+
+    return showToast(
+      "Please enter your full name.",
+      "error"
+    );
+
+  }
+
+
+  if(
+    schoolName.length < 2
+  ){
+
+    return showToast(
+      "Please enter your school name.",
+      "error"
+    );
+
+  }
+
+
+  if(
+    !/^[6-9][0-9]{9}$/.test(
+      mobile
+    )
+  ){
+
+    return showToast(
+      "Please enter a valid 10-digit Indian mobile number.",
+      "error"
+    );
+
+  }
+
+
+  const button =
+    document.getElementById(
+      "submitButton"
+    );
+
+
+  if(button){
+    button.disabled = true;
+    button.textContent =
+      "Saving Profile...";
+  }
+
+
+  try{
+
+    /*
+     * Google already provides the verified identity.
+     * Password signup still requires email verification.
+     */
+
+    await updateProfile(
+      user,
+      {
+        displayName: fullName
+      }
+    );
+
+
+    await saveAdminProfile(
+      user,
+      {
+        fullName,
+        schoolName,
+        mobile,
+        provider:
+          google
+            ? "google"
+            : "password"
+      }
+    );
+
+
+    const profileSnap =
+      await getDoc(
+        doc(
+          db,
+          "users",
+          user.uid
+        )
+      );
+
+
+    if(
+      !profileSnap.exists()
+    ){
+
+      throw new Error(
+        "ACCOUNT_PROFILE_NOT_FOUND"
+      );
+
+    }
+
+
+    currentProfile =
+      profileSnap.data();
+
+
+    /*
+     * Google account:
+     * Firebase/Google has already authenticated the
+     * account, so open Admin directly.
+     */
+
+    if(
+      google
+    ){
+
+      openAdminPanel(
+        user,
+        currentProfile
+      );
+
+      showToast(
+        "Google Admin account created successfully.",
+        "success"
+      );
+
+      return;
+    }
+
+
+    /*
+     * Email/password:
+     * Keep existing email verification behaviour.
+     */
+
+    if(
+      !user.emailVerified
+    ){
+
+      verificationUser =
+        user;
+
+      showVerificationScreen(
+        user
+      );
+
+      showToast(
+        "Verification email sent.",
+        "success"
+      );
+
+      return;
+    }
+
+
+    openAdminPanel(
+      user,
+      currentProfile
+    );
+
+
+  }catch(error){
+
+    console.error(
+      "PROFILE COMPLETION ERROR:",
+      error
+    );
+
+    showFirebaseError(
+      error
+    );
+
+
+  }finally{
+
+    if(button){
+      button.disabled = false;
+      updateAuthUI();
+    }
+
+  }
 }
 
 function showVerificationScreen(user){document.getElementById("authApp").style.display="none";document.getElementById("adminPanel").style.display="none";document.getElementById("teacherPanel").style.display="none";document.getElementById("parentPanel").style.display="none";document.getElementById("verificationScreen").style.display="flex";document.getElementById("verificationEmail").textContent=user.email||"";verificationUser=user}
