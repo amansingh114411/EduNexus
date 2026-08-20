@@ -5250,6 +5250,87 @@ body.app-module-open .edn-bottom-nav{
 
   window.__EDUNEXUS_WEBVIEW_BOOT__.pendingRole = "admin";
 
+/*
+ * =====================================================
+ * WEBVIEW SAFE AUTH MODE BRIDGE
+ * =====================================================
+ *
+ * Prevents:
+ * "switchMode is not defined"
+ * while Firebase ES module is loading.
+ */
+
+window.__EDUNEXUS_WEBVIEW_BOOT__.pendingAuthMode = "login";
+
+window.switchMode = function(mode) {
+
+  if(mode !== "login" && mode !== "signup"){
+    mode = "login";
+  }
+
+  window.__EDUNEXUS_WEBVIEW_BOOT__.pendingAuthMode = mode;
+
+  /*
+   * If Firebase/application module is already ready,
+   * immediately use the real implementation.
+   */
+  if(
+    typeof window.__EDUNEXUS_REAL_SWITCH_MODE__ ===
+    "function"
+  ){
+    return window.__EDUNEXUS_REAL_SWITCH_MODE__(mode);
+  }
+
+  /*
+   * Module is still loading.
+   * Update the visible Auth UI immediately.
+   */
+  var loginTab =
+    document.getElementById("loginTab");
+
+  var signupTab =
+    document.getElementById("signupTab");
+
+  var profileFields =
+    document.getElementById("profileFields");
+
+  var forgotPassword =
+    document.getElementById("forgotPassword");
+
+  if(loginTab){
+    loginTab.classList.toggle(
+      "active",
+      mode === "login"
+    );
+  }
+
+  if(signupTab){
+    signupTab.classList.toggle(
+      "active",
+      mode === "signup"
+    );
+  }
+
+  if(profileFields){
+    profileFields.classList.toggle(
+      "show",
+      mode === "signup"
+    );
+  }
+
+  if(forgotPassword){
+    forgotPassword.style.display =
+      mode === "signup"
+        ? "none"
+        : "block";
+  }
+
+  console.log(
+    "EduNexus: auth mode queued:",
+    mode
+  );
+};
+
   window.selectRole = function(role) {
 
     if (
@@ -6953,7 +7034,8 @@ if (
 window.selectRole =
   window.__EDUNEXUS_REAL_SELECT_ROLE__;
 
-window.switchMode=function(mode){
+window.__EDUNEXUS_REAL_SWITCH_MODE__ =
+function(mode){
 
  if(selectedRole!=="admin"){
    mode="login";
@@ -7021,6 +7103,28 @@ window.switchMode=function(mode){
  updateAuthUI();
 
 };
+
+/*
+ * Apply auth mode selected while the
+ * Firebase module was loading.
+ */
+if(
+  window.__EDUNEXUS_WEBVIEW_BOOT__.pendingAuthMode
+){
+  const pendingMode =
+    window.__EDUNEXUS_WEBVIEW_BOOT__
+      .pendingAuthMode;
+
+  window.__EDUNEXUS_REAL_SWITCH_MODE__(
+    pendingMode
+  );
+}
+
+/*
+ * Expose the real implementation globally.
+ */
+window.switchMode =
+  window.__EDUNEXUS_REAL_SWITCH_MODE__;
 
 function updateAuthUI(){
  const b=document.getElementById("submitButton");
