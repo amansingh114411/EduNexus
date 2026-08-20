@@ -7286,6 +7286,7 @@ async function createAdminAccount(){
       "submitButton"
     );
 
+authFlowInProgress = true;
 
   if(b){
     b.disabled = true;
@@ -7570,12 +7571,14 @@ async function createAdminAccount(){
 
   }finally{
 
-    if(b){
-      b.disabled = false;
-      updateAuthUI();
-    }
+  authFlowInProgress = false;
 
+  if(b){
+    b.disabled = false;
+    updateAuthUI();
   }
+
+ }
 }
 
 async function loginAdmin(){
@@ -7608,6 +7611,8 @@ async function loginAdmin(){
     document.getElementById(
       "submitButton"
     );
+
+authFlowInProgress = true;
 
   b.disabled = true;
   b.textContent = "Signing In...";
@@ -7732,13 +7737,15 @@ async function loginAdmin(){
 
   }finally{
 
-    b.disabled = false;
+  authFlowInProgress = false;
 
-    updateAuthUI();
+  b.disabled = false;
+  updateAuthUI();
 
-  }
+ }
 }
 
+let authFlowInProgress = false;
 let assignedLoginInProgress = false;
 
 async function loginAssignedUser(){
@@ -8453,7 +8460,128 @@ function showVerificationScreen(user){
   );
 }
 window.resendVerification=async function(){if(!verificationUser)return showToast("No verification account found.","error");const b=document.getElementById("resendVerificationBtn");b.disabled=true;b.textContent="Sending...";try{await sendEmailVerification(verificationUser);showToast("Verification email sent again.","success")}catch(e){showFirebaseError(e)}finally{b.disabled=false;b.textContent="Resend Verification Email"}};
-window.checkVerification=async function(){if(!verificationUser)return;const b=document.getElementById("checkVerificationBtn");b.disabled=true;b.textContent="Checking...";try{await reload(verificationUser);if(!verificationUser.emailVerified)return showToast("Email is not verified yet. Open the verification email first.","error");const ref=doc(db,"users",verificationUser.uid),s=await getDoc(ref);if(s.exists()){await setDoc(ref,{emailVerified:true,updatedAt:serverTimestamp()},{merge:true});currentProfile={...s.data(),emailVerified:true};openAdminPanel(verificationUser,currentProfile);showToast("Email verified successfully.","success")}else showProfileRecovery(verificationUser)}catch(e){showFirebaseError(e)}finally{b.disabled=false;b.textContent="I've Verified My Email"}};
+window.checkVerification=async function(){
+
+  if(!verificationUser){
+    showToast(
+      "No verification account found.",
+      "error"
+    );
+    return;
+  }
+
+  const b =
+    document.getElementById(
+      "checkVerificationBtn"
+    );
+
+  if(b){
+    b.disabled = true;
+    b.textContent = "Checking...";
+  }
+
+  try{
+
+    /*
+     * -----------------------------------------------------
+     * REFRESH FIREBASE AUTH USER
+     * -----------------------------------------------------
+     *
+     * Firebase Authentication is the source of truth
+     * for email verification.
+     *
+     * DO NOT write emailVerified back to Firestore here.
+     * -----------------------------------------------------
+     */
+
+    await reload(
+      verificationUser
+    );
+
+    /*
+     * -----------------------------------------------------
+     * EMAIL STILL NOT VERIFIED
+     * -----------------------------------------------------
+     */
+
+    if(!verificationUser.emailVerified){
+
+      showToast(
+        "Email is not verified yet. Open the verification email first.",
+        "error"
+      );
+
+      return;
+    }
+
+    /*
+     * -----------------------------------------------------
+     * EMAIL VERIFIED
+     * -----------------------------------------------------
+     */
+
+    const ref =
+      doc(
+        db,
+        "users",
+        verificationUser.uid
+      );
+
+    const s =
+      await getDoc(ref);
+
+    if(!s.exists()){
+
+      showProfileRecovery(
+        verificationUser
+      );
+
+      return;
+    }
+
+    currentProfile = {
+      ...s.data(),
+      emailVerified:true
+    };
+
+    /*
+     * Open the normal Admin flow.
+     *
+     * openAdminPanel() will perform the existing
+     * subscription check.
+     */
+
+    await openAdminPanel(
+      verificationUser,
+      currentProfile
+    );
+
+    showToast(
+      "Email verified successfully.",
+      "success"
+    );
+
+  }catch(e){
+
+    console.error(
+      "EMAIL VERIFICATION CHECK ERROR:",
+      e
+    );
+
+    showFirebaseError(
+      e
+    );
+
+  }finally{
+
+    if(b){
+      b.disabled = false;
+      b.textContent =
+        "I've Verified My Email";
+    }
+
+  }
+};
 window.backToLogin=async function(){try{if(auth.currentUser)await signOut(auth)}catch(e){}verificationUser=null;document.getElementById("verificationScreen").style.display="none";document.getElementById("authApp").style.display="block";document.getElementById("authApp").classList.add("show");document.getElementById("authForm").reset();document.getElementById("email").readOnly=false;selectedRole="admin";document.querySelectorAll(".role").forEach(x=>x.classList.toggle("active",x.dataset.role==="admin"));document.getElementById("passwordGroup").style.display="block";switchMode("login")};
 window.forgotPassword=async function(){const email=document.getElementById("email").value.trim().toLowerCase();if(!email)return showToast("Enter your email first.","error");try{await sendPasswordResetEmail(auth,email);showToast("Password reset email sent.","success")}catch(e){showFirebaseError(e)}};
 
@@ -12421,6 +12549,10 @@ await updateDoc(
 window.logoutUser=async function(){try{await signOut(auth);hideAllPanels();document.getElementById("authApp").style.display="block";document.getElementById("authApp").classList.add("show");document.getElementById("authForm").reset();document.getElementById("email").readOnly=false;selectedRole="admin";document.querySelectorAll(".role").forEach(x=>x.classList.toggle("active",x.dataset.role==="admin"));switchMode("login");showToast("Logged out successfully.","success")}catch(e){showFirebaseError(e)}};
 
 onAuthStateChanged(auth,async user=>{
+
+if(authFlowInProgress){
+  return;
+}
 
     if(!user){
 
