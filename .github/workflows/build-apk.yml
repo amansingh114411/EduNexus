@@ -71,7 +71,7 @@ jobs:
 
 
       # =====================================================
-      # 6. ADD ANDROID
+      # 6. ADD ANDROID PLATFORM
       # =====================================================
 
       - name: Add Android platform
@@ -80,7 +80,7 @@ jobs:
 
 
       # =====================================================
-      # 7. COPY WEB APP
+      # 7. COPY WEB APP TO ANDROID
       # =====================================================
 
       - name: Copy web app to Android
@@ -122,7 +122,7 @@ jobs:
 
 
       # =====================================================
-      # 10. VERIFY RELEASE KEY
+      # 10. VERIFY RELEASE SIGNING KEY
       # =====================================================
 
       - name: Verify release signing key
@@ -197,7 +197,7 @@ jobs:
 
 
       # =====================================================
-      # 13. VERIFY APK
+      # 13. VERIFY APK EXISTS
       # =====================================================
 
       - name: Verify APK
@@ -220,38 +220,45 @@ jobs:
       # =====================================================
 
       - name: Verify APK signature
-  run: |
-    set -e
+        run: |
+          set -e
 
-    APK="android/app/build/outputs/apk/release/app-release.apk"
+          APK="android/app/build/outputs/apk/release/app-release.apk"
 
-    APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name "apksigner" | sort -V | tail -n 1)
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" \
+            -type f \
+            -name "apksigner" \
+            | sort -V \
+            | tail -n 1)
 
-    if [ -z "$APKSIGNER" ]; then
-      echo "ERROR: Android apksigner was not found."
-      exit 1
-    fi
+          if [ -z "$APKSIGNER" ]; then
+            echo "ERROR: Android apksigner was not found."
+            exit 1
+          fi
 
-    echo "Using apksigner:"
-    echo "$APKSIGNER"
+          echo "Using apksigner:"
+          echo "$APKSIGNER"
 
-    "$APKSIGNER" verify --verbose "$APK"
+          "$APKSIGNER" verify --verbose "$APK"
 
-    echo "APK signature verification passed."
+          echo "APK signature verification passed."
 
 
       # =====================================================
-      # 15. COPY FINAL APK
+      # 15. PREPARE FINAL APK
       # =====================================================
 
       - name: Prepare final APK
         run: |
+          set -e
+
           mkdir -p release
 
           cp \
             android/app/build/outputs/apk/release/app-release.apk \
             release/EduNexus-ERP-release.apk
 
+          echo "Final APK prepared:"
           ls -lh release/EduNexus-ERP-release.apk
 
 
