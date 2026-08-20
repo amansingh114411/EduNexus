@@ -1,0 +1,59 @@
+name: Generate EduNexus Signing Key
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-key:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Generate Release Keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -e
+
+          keytool \
+            -genkeypair \
+            -v \
+            -keystore edunexus-release.jks \
+            -alias edunexus \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -storepass "$KEYSTORE_PASSWORD" \
+            -keypass "$KEY_PASSWORD" \
+            -dname "CN=EduNexus ERP, OU=EduNexus, O=EduNexus, L=India, ST=Rajasthan, C=IN"
+
+          echo "Keystore generated successfully."
+
+      - name: Convert Keystore to Base64
+        run: |
+          base64 -w 0 edunexus-release.jks > edunexus-release.base64.txt
+          echo "Base64 keystore generated."
+
+      - name: Verify Keystore
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          keytool \
+            -list \
+            -keystore edunexus-release.jks \
+            -storepass "$KEYSTORE_PASSWORD"
+
+      - name: Upload Signing Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: EduNexus-Release-Signing-Key
+          path: |
+            edunexus-release.jks
+            edunexus-release.base64.txt
+          retention-days: 7
